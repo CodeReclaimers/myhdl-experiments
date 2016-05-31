@@ -2,36 +2,53 @@ import math
 from myhdl import *
 
 
-def to_fixed(x, N):
-    return int(x * (1 << N))
+class FixedDef:
+    """Super-low budget signed fixed-point implementation."""
+    def __init__(self, m, f):
+        """
+        :param m: Number of bits before the radix point.
+        :param f: Number of bits after the radix point.
+        """
+        self.m = m
+        self.f = f
+        self.max_val = 1 << (m + f)
+        self.min_val = -self.max_val
+
+    def make_signal(self, init_value):
+        return Signal(intbv(init_value, min=self.min_val, max=self.max_val))
+
+    def fixed_mul(self, z, x, y):
+        @always_comb
+        def logic():
+            """Return the product of the fixed point inputs x and y via z."""
+            z.next = (x * y) >> self.f
+
+        return logic
+
+    def to_fixed(self, x):
+        """Compute the nearest fixed-point representation of x."""
+        return int(x * (1 << self.f))
+
+    def to_float(self, x):
+        """Compute the nearest floating-point representation of fixed-point value x."""
+        return int(x) / float(1 << self.f)
 
 
-def to_float(x, N):
-    return int(x) / float(1 << N)
+def ExpComb(x, y, fixed_def):
+    x2 = fixed_def.make_signal(0)
+    inst_x2 = fixed_def.fixed_mul(x2, x, x)
 
-
-def fixed_mul(z, x, y, N):
     @always_comb
     def logic():
-        z.next = (x * y) >> N
-
-    return logic
-
-
-def ExpComb(x, y, N):
-    x2 = Signal(intbv(0)[N:])
-    inst_x2 = fixed_mul(x2, x, x, N)
-
-    @always_comb
-    def logic():
-        y.next = (1 << N) + x + (x2 >> 1)
+        """Second-order Taylor expansion of the exponential function around 0."""
+        y.next = (1 << fixed_def.f) + x + (x2 >> 1)
 
     return instances()
 
 
-def ExpSeq(x, y, clock, reset, N):
-    y_comb = Signal(intbv(0)[N+1:])
-    exp_inst = ExpComb(x, y_comb, N)
+def ExpSeq(x, y, clock, reset, fixed_def):
+    y_comb = fixed_def.make_signal(0)
+    exp_inst = ExpComb(x, y_comb, fixed_def)
 
     @always_seq(clock.posedge, reset=reset)
     def reg_exp():
@@ -40,17 +57,15 @@ def ExpSeq(x, y, clock, reset, N):
     return instances()
 
 
-
-
 def exp_test_bench(N):
     reset = ResetSignal(1, active=0, async=True)
 
-    y = Signal(intbv(0)[N+1:])
-    x = Signal(intbv(0)[N+1:])
+    fixed_def = FixedDef(1, N)
+    y = fixed_def.make_signal(0)
+    x = fixed_def.make_signal(0)
     clock = Signal(bool(0))
 
-    exp_inst = ExpSeq(x, y, clock, reset, N)
-    #exp_inst = ExpComb(x, y, N)
+    exp_inst = ExpSeq(x, y, clock, reset, fixed_def)
 
     period = delay(1)
 
@@ -71,9 +86,9 @@ def exp_test_bench(N):
         while 1:
             yield clock.posedge
             yield delay(1)
-            xf = to_float(x.val, N)
-            yf = to_float(y.val, N)
-            ygold = math.exp(to_float(x.val, N))
+            xf = fixed_def.to_float(x.val)
+            yf = fixed_def.to_float(y.val)
+            ygold = math.exp(fixed_def.to_float(x.val))
             relerr = (yf - ygold) / ygold
             print "x = %f (%s), test y = %f (%s), gold y = %f, relative err = %f" % (xf, bin(x), yf, bin(y), ygold, relerr)
 
@@ -81,14 +96,15 @@ def exp_test_bench(N):
 
 
 if 0:
-    bits = 5
-    X = Signal(intbv(0)[bits:])
-    Y = Signal(intbv(0)[bits:])
-    toVerilog(ExpComb, X, Y, bits)
+    fixed_def = FixedDef(1, 5)
+
+    X = fixed_def.make_signal(0)
+    Y = fixed_def.make_signal(0)
+    toVerilog(ExpComb, X, Y, fixed_def)
 
     clock = Signal(bool())
     reset = ResetSignal(1, active=0, async=True)
-    toVerilog(ExpSeq, X, Y, clock, reset, bits)
+    toVerilog(ExpSeq, X, Y, clock, reset, fixed_def)
 
 else:
     tb = traceSignals(exp_test_bench, 10)
