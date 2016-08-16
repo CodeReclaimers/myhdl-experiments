@@ -24,4 +24,10 @@ give errors about being out of range for the fixed-point representation.)
 When you run the `build.sh` script, it will attempt to synthesize the generated
 Verilog designs for the Lattice ICEStick.
 
+# 4-bit results
+![Output for 4-bit fixed exp](4-bit-output.png)
+![Relative error for 4-bit fixed exp](4-bit-relative-error.png)
+
+# 8-bit results
+![Output for 8-bit fixed exp](8-bit-output.png)
 ![Relative error for 8-bit fixed exp](8-bit-relative-error.png)
