@@ -76,7 +76,7 @@ def ExpSeq(x, y, clock, reset, fixed_def):
 
 
 # Globals to contain simulation data for plotting.
-x_vals, relerr_vals = [], []
+x_vals, y_vals, relerr_vals = [], [], []
 
 
 def exp_test_bench(N):
@@ -116,13 +116,14 @@ def exp_test_bench(N):
             xf, bin(x.val), yf, bin(y.val), ygold, relerr)
 
             x_vals.append(xf)
+            y_vals.append(yf)
             relerr_vals.append(relerr)
 
     return instances()
 
 
 def convert():
-    fixed_def = FixedDef(1, 8)
+    fixed_def = FixedDef(1, 6)
 
     X = fixed_def.make_signal(0)
     Y = fixed_def.make_signal(0)
@@ -134,17 +135,35 @@ def convert():
 
 
 def simulate():
-    tb = traceSignals(exp_test_bench, 8)
+    N = 6
+    tb = traceSignals(exp_test_bench, N-1)
     sim = Simulation(tb)
     sim.run()
 
-    # Display relative error as a function of x.
+    # Sort the data in order of increasing x.
+    global x_vals, y_vals, relerr_vals
+    data = zip(x_vals, y_vals, relerr_vals)
+    data.sort()
+    x_vals, y_vals, relerr_vals = zip(*data)
+
     import matplotlib.pyplot as plt
+    # Display output vs. actual exp function.
+    plt.figure()
+    plt.plot(x_vals, y_vals, "r.-", label= "exp_%d(x)" % N)
+    plt.plot(x_vals, [math.exp(x) for x in x_vals], "g.-", label="exp(x)")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.grid()
+    plt.legend(loc="best")
+    plt.title("%d-bit fixed point exp()" % N)
+
+    # Display relative error as a function of x.
+    plt.figure()
     plt.plot(x_vals, relerr_vals, '.')
     plt.xlabel("x")
     plt.ylabel("relative error")
     plt.grid()
-    plt.title("8-bit fixed point exp()")
+    plt.title("%d-bit fixed point exp()" % N)
     plt.show()
 
 
